@@ -1,21 +1,14 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
+import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const db = new Database("monetizer.db");
-
-// Initialize DB
-db.exec(`
-  CREATE TABLE IF NOT EXISTS user_settings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    wallet_address TEXT UNIQUE,
-    binance_usdt_address TEXT
-  )
-`);
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseKey = process.env.SUPABASE_ANON_KEY || "";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function startServer() {
   const app = express();
@@ -24,20 +17,48 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
-  app.get("/api/settings/:address", (req, res) => {
+  app.get("/api/settings/:address", async (req, res) => {
     const { address } = req.params;
-    const settings = db.prepare("SELECT * FROM user_settings WHERE wallet_address = ?").get(address);
-    res.json(settings || { binance_usdt_address: "" });
+    
+    if (!supabaseUrl || !supabaseKey) {
+      return res.json({ binance_usdt_address: "" });
+    }
+
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("*")
+      .eq("wallet_address", address)
+      .single();
+
+    if (error && error.code !== "PGRST116") { // PGRST116 is "no rows found"
+      console.error("Supabase error:", error);
+      return res.status(500).json({ message: "Database error" });
+    }
+
+    res.json(data || { binance_usdt_address: "" });
   });
 
-  app.post("/api/settings", (req, res) => {
+  app.post("/api/settings", async (req, res) => {
     const { wallet_address, binance_usdt_address } = req.body;
-    const stmt = db.prepare(`
-      INSERT INTO user_settings (wallet_address, binance_usdt_address)
-      VALUES (?, ?)
-      ON CONFLICT(wallet_address) DO UPDATE SET binance_usdt_address = excluded.binance_usdt_address
-    `);
-    stmt.run(wallet_address, binance_usdt_address);
+
+    if (!supabaseUrl || !supabaseKey) {
+      return res.status(500).json({ message: "Supabase credentials not configured" });
+    }
+
+    const { error } = await supabase
+      .from("user_settings")
+      .upsert({ 
+        wallet_address, 
+        binance_usdt_address 
+      }, { 
+        onConflict: "wallet_address" 
+      });
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return res.status(500).json({ message: "Failed to save settings" });
+    }
+
     res.json({ success: true });
   });
 
