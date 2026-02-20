@@ -44,6 +44,14 @@ async function startServer() {
   // Mock Exchange Rates API (In a real app, these would fetch from CEX/DEX APIs)
   app.get("/api/rates/:symbol", async (req, res) => {
     const { symbol } = req.params;
+
+    // Simulate occasional API failure (10% chance)
+    if (Math.random() < 0.1) {
+      return res.status(503).json({ 
+        message: "Exchange API is currently overloaded. Please try again in a few seconds." 
+      });
+    }
+
     // For demo purposes, we'll return slightly varied rates
     // In production, you'd use axios.get('https://api.binance.com/api/v3/ticker/price?symbol=' + symbol + 'USDT')
     const basePrice = 1.0; // Mock base

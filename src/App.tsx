@@ -47,8 +47,10 @@ function Dashboard() {
   
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [binanceWallet, setBinanceWallet] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [monetizing, setMonetizing] = useState(false);
   const [step, setStep] = useState<'idle' | 'comparing' | 'executing' | 'success'>('idle');
@@ -71,14 +73,16 @@ function Dashboard() {
 
   const saveSettings = async () => {
     setIsSaving(true);
+    setSettingsError(null);
     try {
       await axios.post('/api/settings', {
         wallet_address: address,
         binance_usdt_address: binanceWallet
       });
       setShowSettings(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save settings', err);
+      setSettingsError(err.response?.data?.message || 'Failed to save settings. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -86,11 +90,13 @@ function Dashboard() {
 
   const fetchRates = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await axios.get('/api/rates/ETH');
       setRates(res.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch rates', err);
+      setError(err.response?.data?.message || err.message || 'Failed to fetch exchange rates. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -103,15 +109,30 @@ function Dashboard() {
     }
     setMonetizing(true);
     setStep('comparing');
-    await fetchRates();
     
-    setTimeout(() => {
-      setStep('executing');
+    // We need to know if fetchRates succeeded
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await axios.get('/api/rates/ETH');
+      setRates(res.data);
+      
+      // Only proceed if successful
       setTimeout(() => {
-        setStep('success');
-        setMonetizing(false);
-      }, 3000);
-    }, 2000);
+        setStep('executing');
+        setTimeout(() => {
+          setStep('success');
+          setMonetizing(false);
+        }, 3000);
+      }, 2000);
+    } catch (err: any) {
+      console.error('Failed to fetch rates', err);
+      setError(err.response?.data?.message || err.message || 'Failed to fetch exchange rates. Please check your connection and try again.');
+      setMonetizing(false);
+      setStep('idle');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isConnected) {
@@ -132,16 +153,49 @@ function Dashboard() {
             <p className="text-gray-400">Connect your wallet to detect assets and find the best liquidation rates across 6+ exchanges.</p>
           </div>
           <div className="space-y-3">
-            {connectors.map((connector) => (
-              <button
-                key={connector.id}
-                onClick={() => connect({ connector })}
-                className="w-full flex items-center justify-between p-4 glass-card hover:bg-white/5 transition-colors group"
-              >
-                <span className="font-medium">{connector.name}</span>
-                <ArrowUpRight className="w-4 h-4 text-gray-500 group-hover:text-white transition-colors" />
-              </button>
-            ))}
+            {connectors.map((connector) => {
+              const isSafe = connector.id === 'walletConnect' || connector.id === 'coinbaseWalletSDK';
+              return (
+                <button
+                  key={connector.id}
+                  onClick={() => connect({ connector })}
+                  className={cn(
+                    "w-full flex items-center justify-between p-4 glass-card transition-all group relative overflow-hidden",
+                    isSafe ? "border-blue-500/50 bg-blue-500/5 hover:bg-blue-500/10" : "hover:bg-white/5 opacity-80 hover:opacity-100"
+                  )}
+                >
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium flex items-center gap-2">
+                      {connector.name}
+                      {isSafe && (
+                        <span className="text-[8px] bg-blue-500 text-white px-1.5 py-0.5 rounded uppercase font-bold tracking-tighter">
+                          Recommended
+                        </span>
+                      )}
+                    </span>
+                    {isSafe && (
+                      <span className="text-[10px] text-gray-500 font-normal">
+                        Works best in preview frames
+                      </span>
+                    )}
+                  </div>
+                  <ArrowUpRight className={cn(
+                    "w-4 h-4 transition-colors",
+                    isSafe ? "text-blue-500" : "text-gray-500 group-hover:text-white"
+                  )} />
+                </button>
+              );
+            })}
+          </div>
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2 text-left">
+            <div className="flex items-center gap-2 text-amber-500 text-xs font-bold uppercase tracking-widest">
+              <AlertCircle className="w-4 h-4" />
+              Iframe Security Warning
+            </div>
+            <p className="text-[10px] text-gray-400 leading-relaxed">
+              Browser extensions like <strong>Trust Wallet</strong> often block connections inside iframes (like this preview). 
+              To connect successfully, please use <strong>WalletConnect</strong> and scan the QR code with your mobile app.
+            </p>
           </div>
           <div className="pt-4 flex items-center justify-center gap-2 text-xs text-gray-500 uppercase tracking-widest font-mono">
             <ShieldCheck className="w-3 h-3" />
@@ -297,7 +351,34 @@ function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rates.length > 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center gap-4 text-blue-500">
+                          <RefreshCw className="w-10 h-10 animate-spin opacity-50" />
+                          <p className="text-sm font-mono uppercase tracking-widest">Fetching Live Rates...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center gap-4 text-red-500">
+                          <AlertCircle className="w-10 h-10 opacity-50" />
+                          <div className="space-y-1">
+                            <p className="text-sm font-bold uppercase tracking-widest">Market Data Unavailable</p>
+                            <p className="text-xs text-gray-500 max-w-xs mx-auto">{error}</p>
+                          </div>
+                          <button 
+                            onClick={fetchRates}
+                            className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-xs font-bold uppercase transition-colors"
+                          >
+                            Retry Connection
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : rates.length > 0 ? (
                     rates.map((exchange, idx) => (
                       <tr 
                         key={exchange.name} 
@@ -431,6 +512,12 @@ function Dashboard() {
               </div>
 
               <div className="space-y-4">
+                {settingsError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-500 text-xs">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {settingsError}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase font-mono text-gray-500 tracking-widest">Binance USDT Address (BEP-20 / ERC-20)</label>
                   <input 
