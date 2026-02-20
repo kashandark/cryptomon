@@ -18,9 +18,10 @@ import {
   useConnect, 
   useDisconnect, 
   useBalance,
+  useReadContracts,
   WagmiProvider 
 } from 'wagmi';
-import { formatUnits } from 'viem';
+import { formatUnits, parseAbi } from 'viem';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './WagmiConfig';
 import axios from 'axios';
@@ -39,12 +40,34 @@ interface ExchangeRate {
   fee: number;
 }
 
+const erc20Abi = parseAbi([
+  'function balanceOf(address owner) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)',
+]);
+
+const SUPPORTED_TOKENS = [
+  { symbol: 'USDT', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7' as `0x${string}`, icon: 'https://cryptologos.cc/logos/tether-usdt-logo.png' },
+  { symbol: 'WBTC', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' as `0x${string}`, icon: 'https://cryptologos.cc/logos/wrapped-bitcoin-wbtc-logo.png' },
+  { symbol: 'USDC', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as `0x${string}`, icon: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png' },
+];
+
 function Dashboard() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { data: balance } = useBalance({ address });
   
+  const tokenContracts = SUPPORTED_TOKENS.flatMap(token => [
+    { address: token.address, abi: erc20Abi, functionName: 'balanceOf', args: [address] },
+    { address: token.address, abi: erc20Abi, functionName: 'decimals' },
+    { address: token.address, abi: erc20Abi, functionName: 'symbol' },
+  ]);
+
+  const { data: tokenData, isLoading: tokensLoading } = useReadContracts({
+    contracts: address ? tokenContracts : [],
+  });
+
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -269,10 +292,11 @@ function Dashboard() {
                 </div>
               </div>
 
+              {/* Native ETH */}
               <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
-                    <Coins className="w-5 h-5 text-blue-500" />
+                  <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center overflow-hidden">
+                    <img src="https://cryptologos.cc/logos/ethereum-eth-logo.png" className="w-6 h-6" alt="ETH" />
                   </div>
                   <div>
                     <div className="font-bold">Ethereum</div>
@@ -288,7 +312,49 @@ function Dashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* ERC-20 Tokens */}
+              {SUPPORTED_TOKENS.map((token, i) => {
+                if (!tokenData) return null;
+                const balanceVal = tokenData[i * 3]?.result as unknown as bigint;
+                const decimals = tokenData[i * 3 + 1]?.result as unknown as number;
+                const symbol = tokenData[i * 3 + 2]?.result as unknown as string;
+
+                if (!balanceVal || balanceVal === 0n) return null;
+
+                const formatted = formatUnits(balanceVal, decimals || 18);
+                const price = symbol === 'WBTC' ? 65000 : 1; // Mock prices
+
+                return (
+                  <div key={token.address} className="p-4 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center overflow-hidden p-2">
+                        <img src={token.icon} className="w-full h-full object-contain" alt={symbol} />
+                      </div>
+                      <div>
+                        <div className="font-bold">{symbol === 'WBTC' ? 'Wrapped Bitcoin' : symbol}</div>
+                        <div className="text-xs text-gray-500">{symbol}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono">
+                        {Number(formatted).toFixed(4)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        ≈ ${(Number(formatted) * price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
               
+              {tokensLoading && (
+                <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex items-center justify-center gap-3 text-xs text-gray-500">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  Scanning for tokens...
+                </div>
+              )}
+
               <div className="p-4 opacity-50 border border-dashed border-white/10 rounded-xl flex items-center justify-center text-xs text-gray-500 italic">
                 Scanning for other ERC-20 tokens...
               </div>
