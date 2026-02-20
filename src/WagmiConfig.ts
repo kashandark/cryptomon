@@ -1,9 +1,9 @@
 import { http, createConfig } from 'wagmi';
-import { mainnet, polygon, arbitrum } from 'wagmi/chains';
+import { mainnet, polygon, arbitrum, bsc } from 'wagmi/chains';
 import { injected, walletConnect, coinbaseWallet } from 'wagmi/connectors';
 
 export const config = createConfig({
-  chains: [mainnet, polygon, arbitrum],
+  chains: [mainnet, polygon, arbitrum, bsc],
   connectors: [
     walletConnect({ 
       projectId: 'c03dcca235b62d1f74c20609771469c9', 
@@ -32,5 +32,6 @@ export const config = createConfig({
     [mainnet.id]: http(),
     [polygon.id]: http(),
     [arbitrum.id]: http(),
+    [bsc.id]: http(),
   },
 });

@@ -10,7 +10,8 @@ import {
   Settings,
   RefreshCw,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -47,18 +48,27 @@ const erc20Abi = parseAbi([
 ]);
 
 const SUPPORTED_TOKENS = [
-  { symbol: 'USDT', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7' as `0x${string}`, icon: 'https://cryptologos.cc/logos/tether-usdt-logo.png' },
-  { symbol: 'WBTC', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' as `0x${string}`, icon: 'https://cryptologos.cc/logos/wrapped-bitcoin-wbtc-logo.png' },
-  { symbol: 'USDC', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as `0x${string}`, icon: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png' },
+  // Ethereum Mainnet
+  { symbol: 'USDT', chainId: 1, address: '0xdAC17F958D2ee523a2206206994597C13D831ec7' as `0x${string}`, icon: 'https://cryptologos.cc/logos/tether-usdt-logo.png' },
+  { symbol: 'WBTC', chainId: 1, address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' as `0x${string}`, icon: 'https://cryptologos.cc/logos/wrapped-bitcoin-wbtc-logo.png' },
+  
+  // BNB Smart Chain (BSC)
+  { symbol: 'SHIB', chainId: 56, address: '0x2859e4544C4bB03966803b044a93563Bd2D0DD4D' as `0x${string}`, icon: 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png' },
+  { symbol: 'BabyDoge', chainId: 56, address: '0xc748673057861a797275CD8A068AbB95A902e8de' as `0x${string}`, icon: 'https://cryptologos.cc/logos/baby-doge-coin-babydoge-logo.png' },
+  { symbol: 'BTC', chainId: 56, address: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c' as `0x${string}`, icon: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png' },
+  { symbol: 'USD.Z', chainId: 56, address: '0x...placeholder' as `0x${string}`, icon: 'https://picsum.photos/seed/usdz/200' },
+  { symbol: 'LitterCoin', chainId: 56, address: '0x...placeholder' as `0x${string}`, icon: 'https://picsum.photos/seed/litter/200' },
 ];
 
 function Dashboard() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { data: balance } = useBalance({ address });
+
+  const currentChainTokens = SUPPORTED_TOKENS.filter(t => t.chainId === chainId);
   
-  const tokenContracts = SUPPORTED_TOKENS.flatMap(token => [
+  const tokenContracts = currentChainTokens.flatMap(token => [
     { address: token.address, abi: erc20Abi, functionName: 'balanceOf', args: [address] },
     { address: token.address, abi: erc20Abi, functionName: 'decimals' },
     { address: token.address, abi: erc20Abi, functionName: 'symbol' },
@@ -78,6 +88,7 @@ function Dashboard() {
   const [monetizing, setMonetizing] = useState(false);
   const [step, setStep] = useState<'idle' | 'comparing' | 'executing' | 'success'>('idle');
   const [monetizeAmount, setMonetizeAmount] = useState('1.0');
+  const [assetSearch, setAssetSearch] = useState('');
 
   useEffect(() => {
     if (address) {
@@ -270,6 +281,17 @@ function Dashboard() {
               <h2 className="text-sm font-mono uppercase text-gray-500 tracking-widest">Detected Assets</h2>
               <RefreshCw className="w-4 h-4 text-gray-500 cursor-pointer hover:rotate-180 transition-transform duration-500" />
             </div>
+
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input 
+                type="text"
+                value={assetSearch}
+                onChange={(e) => setAssetSearch(e.target.value)}
+                placeholder="Search assets..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-xs font-mono focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
             
             <div className="space-y-4">
               <div className="space-y-2">
@@ -292,38 +314,49 @@ function Dashboard() {
                 </div>
               </div>
 
-              {/* Native ETH */}
-              <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center overflow-hidden">
-                    <img src="https://cryptologos.cc/logos/ethereum-eth-logo.png" className="w-6 h-6" alt="ETH" />
+              {/* Native Asset (ETH or BNB) */}
+              {(!assetSearch || (chainId === 56 ? 'bnb' : 'eth').includes(assetSearch.toLowerCase())) && (
+                <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center overflow-hidden">
+                      <img 
+                        src={chainId === 56 ? "https://cryptologos.cc/logos/binance-coin-bnb-logo.png" : "https://cryptologos.cc/logos/ethereum-eth-logo.png"} 
+                        className="w-6 h-6" 
+                        alt={chainId === 56 ? "BNB" : "ETH"} 
+                      />
+                    </div>
+                    <div>
+                      <div className="font-bold">{chainId === 56 ? 'BNB' : 'Ethereum'}</div>
+                      <div className="text-xs text-gray-500">{chainId === 56 ? 'BNB' : 'ETH'}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-bold">Ethereum</div>
-                    <div className="text-xs text-gray-500">ETH</div>
+                  <div className="text-right">
+                    <div className="font-mono">
+                      {balance ? formatUnits(balance.value, balance.decimals).slice(0, 8) : '0.00'}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      ≈ ${balance ? (Number(formatUnits(balance.value, balance.decimals)) * (chainId === 56 ? 625 : 2500)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-mono">
-                    {balance ? formatUnits(balance.value, balance.decimals).slice(0, 8) : '0.00'}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    ≈ ${balance ? (Number(formatUnits(balance.value, balance.decimals)) * 2500).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* ERC-20 Tokens */}
-              {SUPPORTED_TOKENS.map((token, i) => {
+              {currentChainTokens.filter(token => {
+                if (!assetSearch) return true;
+                const search = assetSearch.toLowerCase();
+                return token.symbol.toLowerCase().includes(search);
+              }).map((token) => {
+                const originalIndex = currentChainTokens.findIndex(t => t.address === token.address);
                 if (!tokenData) return null;
-                const balanceVal = tokenData[i * 3]?.result as unknown as bigint;
-                const decimals = tokenData[i * 3 + 1]?.result as unknown as number;
-                const symbol = tokenData[i * 3 + 2]?.result as unknown as string;
+                const balanceVal = tokenData[originalIndex * 3]?.result as unknown as bigint;
+                const decimals = tokenData[originalIndex * 3 + 1]?.result as unknown as number;
+                const symbol = tokenData[originalIndex * 3 + 2]?.result as unknown as string;
 
                 if (!balanceVal || balanceVal === 0n) return null;
 
                 const formatted = formatUnits(balanceVal, decimals || 18);
-                const price = symbol === 'WBTC' ? 65000 : 1; // Mock prices
+                const price = symbol === 'WBTC' || symbol === 'BTC' ? 67000 : symbol === 'SHIB' ? 0.00003 : 1;
 
                 return (
                   <div key={token.address} className="p-4 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between">
@@ -332,13 +365,13 @@ function Dashboard() {
                         <img src={token.icon} className="w-full h-full object-contain" alt={symbol} />
                       </div>
                       <div>
-                        <div className="font-bold">{symbol === 'WBTC' ? 'Wrapped Bitcoin' : symbol}</div>
+                        <div className="font-bold">{symbol}</div>
                         <div className="text-xs text-gray-500">{symbol}</div>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="font-mono">
-                        {Number(formatted).toFixed(4)}
+                        {Number(formatted).toFixed(symbol === 'SHIB' ? 0 : 4)}
                       </div>
                       <div className="text-xs text-gray-500">
                         ≈ ${(Number(formatted) * price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
