@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Playfair Display", serif;
+}
+
+:root {
+  --bg: #0A0A0B;
+  --card: #141417;
+  --accent: #3B82F6;
+  --accent-glow: rgba(59, 130, 246, 0.2);
+  --success: #10B981;
+  --line: rgba(255, 255, 255, 0.05);
+}
+
+body {
+  background-color: var(--bg);
+  color: #F3F4F6;
+  font-family: var(--font-sans);
+}
+
+.glass-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.data-row {
+  border-bottom: 1px solid var(--line);
+  transition: all 0.2s ease;
+}
+
+.data-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.best-rate-glow {
+  box-shadow: 0 0 20px var(--accent-glow);
+  border-color: var(--accent);
+}
+
